@@ -35,7 +35,7 @@ class HelpDropdown(discord.ui.Select):
             min_values=1, max_values=1,
             options=[
                 discord.SelectOption(emoji="<:March7thThumbsUp:1103668414758780979>", label="Main Page", description="The main page of help command."),
-                discord.SelectOption(emoji="<a:March7thAniThumbsUp:1130036150124417104>", label="Tutorial", description="How to play music!"),
+                discord.SelectOption(emoji="<a:March7thAniCheer:1130036135180124210>", label="Tutorial", description="How to play music!"),
             ] + [
                 discord.SelectOption(emoji=emoji, label=f"{category} Commands", description=f"This is {category.lower()} Category.")
                 for category, emoji in zip(categorys, ["<:1_:1130243485480525905>", "<:2_:1130243518137372722>", "<:3_:1130243561535840356>", "<:4_:1130243603185279037>", "<:5_:1130243702770647192>", "<:6_:1130243647087058974>", "<:7_:1130243737759522857>"])
