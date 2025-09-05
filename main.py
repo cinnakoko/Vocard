@@ -45,7 +45,7 @@ class Translator(discord.app_commands.Translator):
 
     async def translate(self, string: discord.app_commands.locale_str, locale: discord.Locale, context: discord.app_commands.TranslationContext):
         locale_key = str(locale)
-        
+
         if locale_key in func.LOCAL_LANGS:
             translated_text = func.LOCAL_LANGS[locale_key].get(string.message)
 
@@ -53,9 +53,9 @@ class Translator(discord.app_commands.Translator):
                 missing_translations = func.MISSING_TRANSLATOR.setdefault(locale_key, [])
                 if string.message not in missing_translations:
                     missing_translations.append(string.message)
-            
+
             return translated_text
-        
+
         return None
 
 class Vocard(commands.Bot):
@@ -70,11 +70,11 @@ class Vocard(commands.Bot):
             return False
 
         # Check if the bot is directly mentioned
-        if self.user.id in message.raw_mentions and not message.mention_everyone:
+        if message.content.strip() == self.user.mention and not message.mention_everyone:
             prefix = await self.command_prefix(self, message)
             if not prefix:
                 return await message.channel.send("I don't have a bot prefix set.")
-            await message.channel.send(f"My prefix is `{prefix}`")
+            return await message.channel.send(f"My prefix is `{prefix}`")
 
         # Fetch guild settings and check if the mesage is in the music request channel
         settings = await func.get_settings(message.guild.id)
@@ -89,13 +89,13 @@ class Vocard(commands.Bot):
                     elif message.attachments:
                         for attachment in message.attachments:
                             await cmd(ctx, query=attachment.url)
-                    
+
                 except Exception as e:
                     await func.send(ctx, str(e), ephemeral=True)
-                
+
                 finally:
                     return await message.delete()
-            
+
         await self.process_commands(message)
 
     async def connect_db(self) -> None:
@@ -110,19 +110,19 @@ class Vocard(commands.Bot):
         except Exception as e:
             func.logger.error("Not able to connect MongoDB! Reason:", exc_info=e)
             exit()
-        
+
         func.SETTINGS_DB = func.MONGO_DB[db_name]["Settings"]
         func.USERS_DB = func.MONGO_DB[db_name]["Users"]
 
     async def setup_hook(self) -> None:
         func.langs_setup()
-        
+
         # Connecting to MongoDB
         await self.connect_db()
 
         # Set translator
         await self.tree.set_translator(Translator())
-        
+
         # Loading all the module in `cogs` folder
         for module in os.listdir(func.ROOT_DIR + '/cogs'):
             if module.endswith('.py'):
@@ -139,6 +139,7 @@ class Vocard(commands.Bot):
             except Exception as e:
                 func.logger.error(f"Cannot connected to dashboard! - Reason: {e}")
 
+        # Update version tracking
         if not func.settings.version or func.settings.version != update.__version__:
             await self.tree.sync()
             func.update_json("settings.json", new_data={"version": update.__version__})
@@ -162,7 +163,7 @@ class Vocard(commands.Bot):
         error = getattr(exception, 'original', exception)
         if ctx.interaction:
             error = getattr(error, 'original', error)
-            
+
         if isinstance(error, (commands.CommandNotFound, aiohttp.client_exceptions.ClientOSError, discord.errors.NotFound)):
             return
 
@@ -184,7 +185,7 @@ class Vocard(commands.Bot):
         elif not issubclass(error.__class__, voicelink.VoicelinkException):
             error = await func.get_lang(ctx.guild.id, "unknownException") + func.settings.invite_link
             func.logger.error(f"An unexpected error occurred in the {ctx.command.name} command on the {ctx.guild.name}({ctx.guild.id}).", exc_info=exception)
-            
+
         try:
             return await ctx.reply(error, ephemeral=True)
         except:
@@ -192,10 +193,16 @@ class Vocard(commands.Bot):
 
 class CommandCheck(discord.app_commands.CommandTree):
     async def interaction_check(self, interaction: discord.Interaction, /) -> bool:
-        if not interaction.guild:
-            await interaction.response.send_message("This command can only be used in guilds!")
-            return False
+        if interaction.type == discord.InteractionType.application_command:
+            if not interaction.guild:
+                await interaction.response.send_message("This command can only be used in guilds!")
+                return False
 
+            channel_perm = interaction.channel.permissions_for(interaction.guild.me)
+            if not channel_perm.read_messages or not channel_perm.send_messages:
+                await interaction.response.send_message("I don't have permission to read or send messages in this channel.")
+                return False
+            
         return True
 
 async def get_prefix(bot: commands.Bot, message: discord.Message) -> str:
@@ -225,7 +232,7 @@ if (LOG_FILE := LOG_SETTINGS.get("file", {})).get("enable", True):
 for log_name, log_level in LOG_SETTINGS.get("level", {}).items():
     _logger = logging.getLogger(log_name)
     _logger.setLevel(log_level)
-        
+
 # Setup the bot object
 intents = discord.Intents.default()
 intents.message_content = False if func.settings.bot_prefix is None else True

@@ -117,11 +117,45 @@
                 "color": "@@default_embed_color@@"
             }
         },
-        "default_buttons": [
-            ["back", "resume", "skip", {"stop": "red"}, "add"],
-            ["tracks"]
-        ],
-        "disableButtonText": false
+        "buttons": [
+            {
+                "back": {
+                    "emoji": "⏮️",
+                    "label": "@@t_buttonBack@@"
+                },
+                "play-pause": {
+                    "states": {
+                        "pause": {
+                            "emoji": "⏸️",
+                            "label": "@@t_buttonPause@@"
+                        },
+                        "resume": {
+                            "emoji": "▶️",
+                            "label": "@@t_buttonResume@@"
+                        }
+                    }
+                },
+                "skip": {
+                    "emoji": "⏭️",
+                    "label": "@@t_buttonSkip@@"
+                },
+                "stop": {
+                    "emoji": "⏹️",
+                    "label": "@@t_buttonLeave@@",
+                    "style": "red"
+                },
+                "add-fav": {
+                    "emoji": "❤️",
+                    "label": ""
+                }
+            },
+            {
+                "tracks": {
+                    "label": "@@t_playerDropdown@@",
+                    "max_options": 10
+                }
+            }
+        ]
     },
     "default_voice_status_template": "{{@@track_name@@ != 'None' ?? @@track_source_emoji@@ Now Playing: @@track_name@@ // Waiting for song requests}}",
     "cooldowns": {
