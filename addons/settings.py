@@ -41,13 +41,13 @@ class Settings:
         self.mongodb_url: str = settings.get("mongodb_url") or os.getenv("MONGODB_URL")
         self.mongodb_name: str = settings.get("mongodb_name") or os.getenv("MONGODB_NAME")
         
-        self.invite_link: str = "https://discord.gg/wRCgB7vBQv"
+        self.invite_link: str = "https://discord.gg/march7th"
         self.nodes: Dict[str, Dict[str, Union[str, int, bool]]] = settings.get("nodes", {})
         self.max_queue: int = settings.get("default_max_queue", 1000)
         self.bot_prefix: str = settings.get("prefix", "")
         self.activity: List[Dict[str, str]] = settings.get("activity", [{"listen": "/help"}])
         self.logging: Dict[Union[str, Dict[str, Union[str, bool]]]] = settings.get("logging", {})
-        self.embed_color: str = int(settings.get("embed_color", "0xb3b3b3"), 16)
+        self.embed_color: str = int(settings.get("embed_color", "0xFFC0CB"), 16)
         self.bot_access_user: List[int] = settings.get("bot_access_user", [])
         self.sources_settings: Dict[Dict[str, str]] = settings.get("sources_settings", {})
         self.cooldowns_settings: Dict[str, List[int]] = settings.get("cooldowns", {})
