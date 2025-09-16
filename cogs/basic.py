@@ -42,7 +42,7 @@ from function import (
 
 from voicelink import SearchType, LoopType
 from addons import LYRICS_PLATFORMS
-from views import SearchView, ListView, LinkView, LyricsView, HelpView
+from views import SearchView, QueueView, LinkView, LyricsView, HelpView
 from validators import url
 
 async def nowplay(ctx: commands.Context, player: voicelink.Player):
@@ -493,7 +493,7 @@ class Basic(commands.Cog):
 
         if player.queue.is_empty:
             return await nowplay(ctx, player)
-        view = ListView(player=player, author=ctx.author)
+        view = QueueView(player=player, author=ctx.author)
         view.response = await send(ctx, await view.build_embed(), view=view)
 
     @queue.command(name="export", aliases=get_aliases("export"))
@@ -577,7 +577,7 @@ class Basic(commands.Cog):
         if not player.queue.history():
             return await nowplay(ctx, player)
 
-        view = ListView(player=player, author=ctx.author, is_queue=False)
+        view = QueueView(player=player, author=ctx.author, is_queue=False)
         view.response = await send(ctx, await view.build_embed(), view=view)
 
     @commands.hybrid_command(name="leave", aliases=get_aliases("leave"))

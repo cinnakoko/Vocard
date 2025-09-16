@@ -27,7 +27,7 @@ from discord.ext import commands
 import function as func
 
 class HelpDropdown(discord.ui.Select):
-    def __init__(self, categories:list):
+    def __init__(self, categories: list[str]) -> None:
         self.view: HelpView
 
         super().__init__(

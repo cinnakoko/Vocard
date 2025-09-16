@@ -21,19 +21,24 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from discord.ext import commands
+import discord
 
-class ButtonOnCooldown(commands.CommandError):
-    def __init__(self, retry_after: float) -> None:
-        self.retry_after = retry_after
-        
-from .controller import InteractiveController
-from .search import SearchView
-from .help import HelpView
-from .queue import QueueView
-from .lyrics import LyricsView
-from .playlist import PlaylistView
-from .inbox import InboxView
-from .link import LinkView
-from .debug import DebugView
-from .embedBuilder import EmbedBuilderView
+
+class BaseModal(discord.ui.Modal):
+    def __init__(self, title: str, items: list[discord.ui.Item], timeout: float = None, custom_id: str = None) -> None:
+        super().__init__(title=title, timeout=timeout, custom_id=custom_id)
+        self._add_items(items)
+        self.values: dict[str, str] = {}
+
+    def _add_items(self, items: list[discord.ui.Item]) -> None:
+        """Add items to the modal."""
+        for item in items:
+            self.add_item(item)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Handle the modal submission."""
+        await interaction.response.defer()
+
+        for item in self.walk_children():
+            if isinstance(item, discord.ui.TextInput):
+                self.values[item.custom_id] = item.value
