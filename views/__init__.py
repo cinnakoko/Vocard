@@ -32,7 +32,7 @@ from .search import SearchView
 from .help import HelpView
 from .queue import QueueView
 from .lyrics import LyricsView
-from .playlist import PlaylistView
+from .playlist import PlaylistViewManager
 from .inbox import InboxView
 from .link import LinkView
 from .debug import DebugView

@@ -122,7 +122,7 @@ class QueueView(discord.ui.View):
             "live",
             "queueTitle",
             "historyTitle",
-            "viewFooter",
+            "playlistViewFooter",
         )
 
         embed = discord.Embed(title=texts[0], color=func.settings.embed_color)

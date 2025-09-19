@@ -191,6 +191,7 @@ async def send(
     content: Union[str, discord.Embed] = None,
     *params,
     view: discord.ui.View = None,
+    file: discord.File = None,
     delete_after: float = None,
     ephemeral: bool = False,
     requires_fetch: bool = False
@@ -223,6 +224,7 @@ async def send(
     send_kwargs = {
         "content": text,
         "embed": embed,
+        "file": file,
         "allowed_mentions": ALLOWED_MENTIONS,
         "silent": settings.get("silent_msg", False),
     }

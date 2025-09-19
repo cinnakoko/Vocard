@@ -23,3 +23,4 @@ SOFTWARE.
 
 from .pagination import Pagination
 from .modal import BaseModal
+from .dynamic_view_manager import DynamicViewManager

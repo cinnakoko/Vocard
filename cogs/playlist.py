@@ -32,60 +32,163 @@ from function import (
     get_user,
     update_user,
     check_roles,
-    get_lang,
-    settings,
     get_aliases,
     cooldown_check,
     logger
 )
 
-from views import PlaylistView, InboxView, HelpView
+from views import PlaylistViewManager, InboxView, HelpView
 
 def assign_playlist_id(existed: list) -> str:
     for i in range(200, 210):
         if str(i) not in existed:
             return str(i)
 
-async def check_playlist_perms(user_id: int, author_id: int, d_id: str) -> dict:
-    playlist = await get_user(author_id, 'playlist')
-    playlist = playlist.get(d_id)
+async def check_playlist_perms(user_id: int, author_id: int, playlist_id: str) -> dict:
+    """Check if user has read permissions for a specific playlist."""
+    user_data = await get_user(author_id, 'playlist')
+    playlist = user_data.get(playlist_id)
+    
     if not playlist or user_id not in playlist['perms']['read']:
         return {}
+    
     return playlist
 
 async def check_playlist(ctx: commands.Context, name: str = None, full: bool = False, share: bool = True) -> dict:
-    user = await get_user(ctx.author.id, 'playlist')
+    """Get user's playlist data with various filtering options."""
+    user_playlists = await get_user(ctx.author.id, 'playlist')
 
-    await ctx.defer()
+    if not ctx.interaction.response.is_done():
+        await ctx.defer()
+    
     if full:
-        return user
+        return user_playlists
     
     if not name:
-        return {'playlist': user['200'], 'position': 1, 'id': "200"}
-
-    for index, data in enumerate(user, start=1):
-        playlist = user[data]
-        if playlist['name'].lower() == name:
+        return {'playlist': user_playlists['200'], 'position': 1, 'id': "200"}
+    
+    for index, playlist_id in enumerate(user_playlists, start=1):
+        playlist = user_playlists[playlist_id]
+        
+        if playlist['name'].lower() == name.lower():
             if playlist['type'] == 'share' and share:
-                playlist = await check_playlist_perms(ctx.author.id, playlist['user'], playlist['referId'])
-                if not playlist or ctx.author.id not in playlist['perms']['read']:
-                    return {'playlist': None, 'position': index, 'id': data}
-            return {'playlist': playlist, 'position': index, 'id': data}
+                shared_playlist = await check_playlist_perms(ctx.author.id, playlist['user'], playlist['referId'])
+                
+                if not shared_playlist or ctx.author.id not in shared_playlist['perms']['read']:
+                    return {'playlist': None, 'position': index, 'id': playlist_id}
+                
+                return {'playlist': shared_playlist, 'position': index, 'id': playlist_id}
+            
+            return {'playlist': playlist, 'position': index, 'id': playlist_id}
+    
     return {'playlist': None, 'position': None, 'id': None}
 
 async def search_playlist(url: str, requester: discord.Member, time_needed: bool = True) -> dict:
+    """Search for playlist tracks from a URL."""
     try:
         tracks = await voicelink.NodePool.get_node().get_tracks(url, requester=requester)
-        tracks = {"name": tracks.name, "tracks": tracks.tracks}
+        result = {"name": tracks.name, "tracks": tracks.tracks}
+        
         if time_needed:
-            time = sum([track.length for track in tracks["tracks"]])
-    except:
+            result["time"] = ctime(sum(track.length for track in tracks.tracks))
+        
+        return result
+    except Exception:
         return {}
-    
-    if time_needed:
-        tracks["time"] = ctime(time)
 
-    return tracks
+async def _process_playlist(ctx: commands.Context, playlist_data: dict, playlist_id: str, is_locked: bool):
+    """Process a single playlist and return its formatted data."""
+    playlist_type = playlist_data['type']
+    
+    # Get appropriate emoji
+    if is_locked:
+        emoji = '🔒'
+    elif playlist_type == 'link':
+        emoji = '🌐'
+    elif playlist_type == 'share':
+        emoji = '🤝'
+    else:
+        emoji = '❤️'
+    
+    # Handle link playlist
+    if playlist_type == 'link':
+        tracks = await search_playlist(playlist_data['uri'], requester=ctx.author)
+        if not tracks:
+            return None
+        
+        return {
+            'emoji': emoji,
+            'id': playlist_id,
+            'time': tracks['time'],
+            'name': playlist_data['name'],
+            'tracks': tracks['tracks'],
+            'perms': playlist_data['perms'],
+            'type': playlist_data['type']
+        }
+    
+    # Handle shared playlist
+    if playlist_type == 'share':
+        shared_playlist = await check_playlist_perms(
+            ctx.author.id, 
+            playlist_data['user'], 
+            playlist_data['referId']
+        )
+        
+        if not shared_playlist:
+            await update_user(ctx.author.id, {"$unset": {f"playlist.{playlist_id}": 1}})
+            return None
+        
+        if shared_playlist['type'] == 'link':
+            tracks = await search_playlist(shared_playlist['uri'], requester=ctx.author)
+            if not tracks:
+                return None
+            
+            return {
+                'emoji': emoji,
+                'id': playlist_id,
+                'time': tracks['time'],
+                'name': playlist_data['name'],
+                'tracks': tracks['tracks'],
+                'perms': shared_playlist['perms'],
+                'owner': playlist_data['user'],
+                'type': 'share'
+            }
+        
+        decoded_tracks = []
+        total_time = 0
+        for track in shared_playlist['tracks']:
+            decoded_track = voicelink.decode(track)
+            total_time += decoded_track.get("length", 0)
+            decoded_tracks.append(decoded_track)
+        
+        return {
+            'emoji': emoji,
+            'id': playlist_id,
+            'time': ctime(total_time),
+            'name': playlist_data['name'],
+            'tracks': decoded_tracks,
+            'perms': shared_playlist['perms'],
+            'owner': playlist_data['user'],
+            'type': 'share'
+        }
+    
+    decoded_tracks = []
+    total_time = 0
+    for track in playlist_data['tracks']:
+        decoded_track = voicelink.decode(track)
+        total_time += decoded_track.get("length", 0)
+        decoded_tracks.append(decoded_track)
+    
+    return {
+        'emoji': emoji,
+        'id': playlist_id,
+        'time': ctime(total_time),
+        'name': playlist_data['name'],
+        'tracks': decoded_tracks,
+        'perms': playlist_data['perms'],
+        'owner': playlist_data.get('owner', ctx.author.id),
+        'type': playlist_data['type']
+    }
 
 class Playlists(commands.Cog, name="playlist"):
     def __init__(self, bot: commands.Bot) -> None:
@@ -156,63 +259,32 @@ class Playlists(commands.Cog, name="playlist"):
     @playlist.command(name="view", aliases=get_aliases("view"))
     @commands.dynamic_cooldown(cooldown_check, commands.BucketType.guild)
     async def view(self, ctx: commands.Context) -> None:
-        "List all your playlist and all songs in your favourite playlist."
-        user = await check_playlist(ctx, full=True)
-        rank, max_p, max_t = check_roles()
-
-        results = []
-        for index, data in enumerate(user, start=1):
-            playlist = user[data]
-            time = 0
-            try:
-                if playlist['type'] == 'link':
-                    tracks = await search_playlist(playlist['uri'], requester=ctx.author)
-                    results.append({'emoji': ('🔒' if max_p < index else '🔗'), 'id': data, 'time': tracks['time'], 'name': playlist['name'], 'tracks': tracks['tracks'], 'perms': playlist['perms'], 'type': playlist['type']})
-                
-                else:
-                    if share := playlist['type'] == 'share':
-                        playlist = await check_playlist_perms(ctx.author.id, playlist['user'], playlist['referId'])
-                        if not playlist:
-                            await update_user(ctx.author.id, {"$unset": {f"playlist.{data}": 1}})
-                            continue
-                        
-                        if playlist['type'] == 'link':
-                            tracks = await search_playlist(playlist['uri'], requester=ctx.author)
-                            results.append({'emoji': ('🔒' if max_p < index else '🤝'), 'id': data, 'time': tracks['time'], 'name': user[data]['name'], 'tracks': tracks['tracks'], 'perms': playlist['perms'], 'owner': user[data]['user'], 'type': 'share'})
-                            continue
-                        
-                    init = []
-                    for track in playlist['tracks']:
-                        dt = voicelink.decode(track)
-                        time += dt.get("length", 0)
-                        init.append(dt)
-                    playlist['tracks'] = init
-                    results.append({'emoji': ('🔒' if max_p < index else ('🤝' if share else '❤️')), 'id': data, 'time': ctime(time), 'name': user[data]['name'], 'tracks': playlist['tracks'], 'perms': playlist['perms'], 'owner': user[data].get('user', None), 'type': user[data]['type']})
+        """List all your playlists and all songs in your favourite playlist."""
+        user_playlists = await check_playlist(ctx, full=True)
+        _, max_playlists, _ = check_roles()
         
-            except:
-                results.append({'emoji': '⛔', 'id': data, 'time': '--:--', 'name': 'Error', 'tracks': [], 'type': 'error'})
-
-        text = await get_lang(ctx.guild.id, "playlistViewTitle", "playlistViewHeaders", "playlistFooter")
-        embed = discord.Embed(
-            title=text[0].format(ctx.author.display_name),
-            description='```prolog\n   %4s %10s %12s %10s\n' % tuple(text[1].split(",")),
-            color=settings.embed_color
-        )
+        playlist_results = []
         
-        for index in range(max_p):
-            try:
-                info = results[index]
-                track_info = (info['emoji'], info['id'], f"[{info['time']}]", info['name'], f"{len(info['tracks'])}")
-            except IndexError:
-                track_info = ("🎵", "-"*3, "[--:--]", "-"*6, f"-")
-
-            embed.description += '%0s %3s. %10s %12s %10s\n' % track_info
+        for index, playlist_id in enumerate(user_playlists, start=1):
+            playlist_data = user_playlists[playlist_id]
+            is_locked = max_playlists < index
             
-        embed.description += "```"
-        embed.set_footer(text=text[2])
-
-        view = PlaylistView(embed, results, ctx.author)
-        view.response = await send(ctx, embed, view=view, ephemeral=True)
+            try:
+                result = await _process_playlist(ctx, playlist_data, playlist_id, is_locked)
+                if result:
+                    playlist_results.append(result)
+            except Exception:
+                playlist_results.append({
+                    'emoji': '⛔',
+                    'id': playlist_id,
+                    'time': '--:--',
+                    'name': 'Error',
+                    'tracks': [],
+                    'type': 'error'
+                })
+                
+        view = PlaylistViewManager(ctx, playlist_results)
+        view.response = await send(ctx, content=await view.build_embed(), view=view, ephemeral=True)
 
     @playlist.command(name="create", aliases=get_aliases("create"))
     @app_commands.describe(
