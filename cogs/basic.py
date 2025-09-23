@@ -127,7 +127,7 @@ class Basic(commands.Cog):
     @app_commands.autocomplete(query=play_autocomplete)
     @commands.dynamic_cooldown(cooldown_check, commands.BucketType.guild)
     async def play(self, ctx: commands.Context, *, query: str, start: str = "0", end: str = "0") -> None:
-        "Loads your input and added it to the queue."
+        "Loads your input into the queue"
         player: voicelink.Player = ctx.guild.voice_client
         if not player:
             player = await voicelink.connect_channel(ctx)
@@ -222,7 +222,7 @@ class Basic(commands.Cog):
     ])
     @commands.dynamic_cooldown(cooldown_check, commands.BucketType.guild)
     async def search(self, ctx: commands.Context, *, query: str, platform: str = SearchType.YOUTUBE.name):
-        "Loads your input and added it to the queue."
+        "Loads your search query and shows the results."
         player: voicelink.Player = ctx.guild.voice_client
         if not player:
             player = await voicelink.connect_channel(ctx)
