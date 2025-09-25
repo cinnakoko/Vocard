@@ -169,7 +169,7 @@ def format_bytes(bytes: int, unit: bool = False):
 
 def _get_lang(lang: str, *keys) -> Optional[Union[list[str], str]]:
     if lang not in LANGS:
-        return "EN"
+        lang = "EN"
 
     if not LANGS[lang]:
         LANGS[lang] = open_json(os.path.join("langs", f"{lang}.json"))
