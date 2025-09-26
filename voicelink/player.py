@@ -258,7 +258,7 @@ class Player(VoiceProtocol):
         """Retrieves a localized message or list of messages based on the given keys
            for the guild associated with this player.
         """
-        return func.get_lang_non_async(self.guild.id, *keys)
+        return func._get_lang(self.settings.get("lang"), *keys)
 
     def required(self, leave=False):
         """

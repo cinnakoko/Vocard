@@ -159,15 +159,6 @@ def check_roles() -> tuple[str, int, int]:
 def truncate_string(text: str, length: int = 40) -> str:
     return text[:length - 3] + "..." if len(text) > length else text
     
-def get_lang_non_async(guild_id: int, *keys) -> Union[list[str], str]:
-    settings = SETTINGS_BUFFER.get(guild_id, {})
-    lang = settings.get("lang", "EN")
-    if lang in LANGS and not LANGS[lang]:
-        LANGS[lang] = open_json(os.path.join("langs", f"{lang}.json"))
-
-    if len(keys) == 1:
-        return LANGS.get(lang, {}).get(keys[0], "Not found!")
-    return [LANGS.get(lang, {}).get(key, "Not found!") for key in keys]
 
 def format_bytes(bytes: int, unit: bool = False):
     if bytes <= 1_000_000_000:
@@ -175,16 +166,23 @@ def format_bytes(bytes: int, unit: bool = False):
     
     else:
         return f"{bytes / (1024 ** 3):.1f}" + ("GB" if unit else "")
-    
-async def get_lang(guild_id:int, *keys) -> Optional[Union[list[str], str]]:
-    settings = await get_settings(guild_id)
-    lang = settings.get("lang", "EN")
-    if lang in LANGS and not LANGS[lang]:
+
+def _get_lang(lang: str, *keys) -> Optional[Union[list[str], str]]:
+    if lang not in LANGS:
+        lang = "EN"
+
+    if not LANGS[lang]:
         LANGS[lang] = open_json(os.path.join("langs", f"{lang}.json"))
 
+    lang_dict = LANGS[lang]
+
     if len(keys) == 1:
-        return LANGS.get(lang, {}).get(keys[0])
-    return [LANGS.get(lang, {}).get(key) for key in keys]
+        return lang_dict.get(keys[0], "Not found!")
+    return [lang_dict.get(key, "Not found!") for key in keys]
+
+async def get_lang(guild_id:int, *keys) -> Optional[Union[list[str], str]]:
+    settings = await get_settings(guild_id)
+    return _get_lang(settings.get("lang"), *keys)
 
 async def send(
     ctx: Union[commands.Context, discord.Interaction],

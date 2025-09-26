@@ -207,13 +207,7 @@ class CommandCheck(discord.app_commands.CommandTree):
 
 async def get_prefix(bot: commands.Bot, message: discord.Message) -> str:
     settings = await func.get_settings(message.guild.id)
-    prefix = settings.get("prefix", func.settings.bot_prefix)
-
-    # Allow owner to use the bot without a prefix
-    if prefix and not message.content.startswith(prefix) and (await bot.is_owner(message.author) or message.author.id in func.settings.bot_access_user):
-        return ""
-
-    return prefix
+    return settings.get("prefix", func.settings.bot_prefix)
 
 # Loading settings and logger
 func.settings = Settings(func.open_json("settings.json"))
