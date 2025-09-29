@@ -1,7 +1,7 @@
 import aiohttp
 import asyncio
 import logging
-import function as func
+import voicelink
 
 from discord.ext import commands
 from typing import Optional
@@ -39,7 +39,7 @@ class IPCClient:
         self._heanders = {
             "Authorization": self._password,
             "User-Id": str(bot.user.id),
-            "Client-Version": func.settings.version
+            "Client-Version": voicelink.Config().version
         }
 
     async def _listen(self) -> None:

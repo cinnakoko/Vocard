@@ -24,16 +24,23 @@ SOFTWARE.
 import discord
 import re
 import voicelink
-import addons
-import views
-import function as func
+import traceback
 
 from discord.ext import commands
 from typing import Optional, Dict, Type, Union, Any
 
+from ..config import Config
+from ..utils import format_ms, send_localized_message
+from ..language import LangHandler
+from ..mongodb import MongoDBHandler
+    
 def key(interaction: discord.Interaction):
     return interaction.user
-    
+
+class ButtonOnCooldown(commands.CommandError):
+    def __init__(self, retry_after: float) -> None:
+        self.retry_after = retry_after
+        
 class ControlButton(discord.ui.Button):
     def __init__(
         self,
@@ -74,7 +81,7 @@ class ControlButton(discord.ui.Button):
     
     async def send(self, interaction: discord.Interaction, key: str, *params, view: discord.ui.View = None, ephemeral: bool = False) -> None:
         stay = self.player.settings.get("controller_msg", True)
-        return await func.send(
+        return await send_localized_message(
             interaction, key, *params,
             view=view,
             delete_after=None if ephemeral or stay else 10,
@@ -191,14 +198,14 @@ class AddFav(ControlButton):
             return await self.send(interaction, "noTrackPlaying")
         if track.is_stream:
             return await self.send(interaction, "playlistAddError")
-        user = await func.get_user(interaction.user.id, 'playlist')
-        rank, max_p, max_t = func.check_roles()
+        user = await MongoDBHandler.get_user(interaction.user.id, 'playlist')
+        _, max_t, _ = Config().get_playlist_config()
         if len(user['200']['tracks']) >= max_t:
             return await self.send(interaction, "playlistLimited", max_t, ephemeral=True)
 
         if track.track_id in user['200']['tracks']:
             return await self.send(interaction, "playlistRepeated", ephemeral=True)
-        respond = await func.update_user(interaction.user.id, {"$push": {'playlist.200.tracks': track.track_id}})
+        respond = await MongoDBHandler.update_user(interaction.user.id, {"$push": {'playlist.200.tracks': track.track_id}})
         if respond:
             await self.send(interaction, "playlistAdded", track.title, interaction.user.mention, user['200']['name'], ephemeral=True)
         else:
@@ -273,7 +280,7 @@ class AutoPlay(ControlButton):
 
         check = not self.player.settings.get("autoplay", False)
         self.player.settings['autoplay'] = check
-        await self.send(interaction, 'autoplay', await func.get_lang(interaction.guild_id, 'enabled' if check else "disabled"))
+        await self.send(interaction, 'autoplay', await LangHandler.get_lang(interaction.guild_id, 'enabled' if check else "disabled"))
 
         if not self.player.is_playing:
             await self.player.do_next()
@@ -313,7 +320,7 @@ class Forward(ControlButton):
         position = int(self.player.position + 10000)
 
         await self.player.seek(position)
-        await self.send(interaction, 'forward', func.time(position))
+        await self.send(interaction, 'forward', format_ms(position))
 
 class Rewind(ControlButton):
     def __init__(self, **kwargs):
@@ -332,7 +339,7 @@ class Rewind(ControlButton):
         position = 0 if (value := int(self.player.position - 30000)) <= 0 else value
         
         await self.player.seek(position)
-        await self.send(interaction, 'rewind', func.time(position))
+        await self.send(interaction, 'rewind', format_ms(position))
 
 class Lyrics(ControlButton):
     def __init__(self, **kwargs):
@@ -342,19 +349,20 @@ class Lyrics(ControlButton):
         )
         
     async def callback(self, interaction: discord.Interaction):
+        from . import LyricsView
         if not self.player or not self.player.is_playing:
             return await self.send(interaction, "noTrackPlaying", ephemeral=True)
         
         title = self.player.current.title
         artist = self.player.current.author
         
-        lyrics_platform = addons.LYRICS_PLATFORMS.get(func.settings.lyrics_platform)
+        lyrics_platform = voicelink.LYRICS_PLATFORMS.get(Config().lyrics_platform)
         if lyrics_platform:
             lyrics = await lyrics_platform().get_lyrics(title, artist)
             if not lyrics:
                 return await self.send(interaction, "lyricsNotFound", ephemeral=True)
 
-            view = views.LyricsView(name=title, source={_: re.findall(r'.*\n(?:.*\n){,22}', v or "") for _, v in lyrics.items()}, author=interaction.user)
+            view = LyricsView(name=title, source={_: re.findall(r'.*\n(?:.*\n){,22}', v or "") for _, v in lyrics.items()}, author=interaction.user)
             view.response = await self.send(interaction, view.build_embed(), view=view, ephemeral=True)
 
 class Tracks(discord.ui.Select):
@@ -379,13 +387,13 @@ class Tracks(discord.ui.Select):
     
     async def callback(self, interaction: discord.Interaction):
         if not self.player.is_privileged(interaction.user):
-            return await func.send(interaction, "missingFunctionPerm", ephemeral=True)
+            return await send_localized_message(interaction, "missingFunctionPerm", ephemeral=True)
         
         self.player.queue.skipto(int(self.values[0].split(". ")[0]))
         await self.player.stop()
 
         if self.player.settings.get("controller_msg", True):
-            await func.send(interaction, "skipped", interaction.user)
+            await send_localized_message(interaction, "skipped", interaction.user)
 
 class Effects(discord.ui.Select):
     def __init__(self, player: "voicelink.Player", btn_data, row):
@@ -404,20 +412,20 @@ class Effects(discord.ui.Select):
     
     async def callback(self, interaction: discord.Interaction):
         if not self.player.is_privileged(interaction.user):
-            return await func.send(interaction, "missingFunctionPerm", ephemeral=True)
+            return await send_localized_message(interaction, "missingFunctionPerm", ephemeral=True)
         
         avalibable_filters = voicelink.Filters.get_available_filters()
         if self.values[0] == "None":
             await self.player.reset_filter(requester=interaction.user)
-            return await func.send(interaction, "clearEffect")
+            return await send_localized_message(interaction, "clearEffect")
         
         selected_filter = avalibable_filters.get(self.values[0].lower())()
         if self.player.filters.has_filter(filter_tag=selected_filter.tag):
             await self.player.remove_filter(filter_tag=selected_filter.tag, requester=interaction.user)
-            await func.send(interaction, "clearEffect")
+            await send_localized_message(interaction, "clearEffect")
         else:
             await self.player.add_filter(selected_filter, requester=interaction.user)
-            await func.send(interaction, "addEffect", selected_filter.tag)
+            await send_localized_message(interaction, "addEffect", selected_filter.tag)
 
 BUTTON_TYPE: Dict[str, Type[Union[ControlButton, discord.ui.Select]]] = {
     "back": Back,
@@ -443,7 +451,7 @@ class InteractiveController(discord.ui.View):
         super().__init__(timeout=None)
 
         self.player: voicelink.Player = player
-        for row_num, btn_row in enumerate(func.settings.controller.get("buttons")):
+        for row_num, btn_row in enumerate(Config().controller.get("buttons")):
             for btn_name, btn_data in btn_row.items():
                 btn_class = BUTTON_TYPE.get(btn_name.lower())
                 if not btn_class:
@@ -458,27 +466,28 @@ class InteractiveController(discord.ui.View):
             
     async def interaction_check(self, interaction: discord.Interaction):
         if not self.player.node._available:
-            await func.send(interaction, "nodeReconnect", ephemeral=True)
+            await send_localized_message(interaction, "nodeReconnect", ephemeral=True)
             return False
 
-        if interaction.user.id in func.settings.bot_access_user:
+        if interaction.user.id in Config().bot_access_user:
             return True
             
         if self.player.channel and self.player.is_user_join(interaction.user):
             retry_after = self.cooldown.update_rate_limit(interaction)
             if retry_after:
-                raise views.ButtonOnCooldown(retry_after)
+                raise ButtonOnCooldown(retry_after)
             return True
         else:
-            await func.send(interaction, "notInChannel", interaction.user.mention, self.player.channel.mention, ephemeral=True)
+            await send_localized_message(interaction, "notInChannel", interaction.user.mention, self.player.channel.mention, ephemeral=True)
             return False
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item) -> None:
-        if isinstance(error, views.ButtonOnCooldown):
+        if isinstance(error, ButtonOnCooldown):
             sec = int(error.retry_after)
             await interaction.response.send_message(f"You're on cooldown for {sec} second{'' if sec == 1 else 's'}!", ephemeral=True)
         
         elif isinstance(error, Exception):
+            traceback.print_exception(error)
             await interaction.response.send_message(error)
             
         return

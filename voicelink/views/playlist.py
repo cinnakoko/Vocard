@@ -22,20 +22,19 @@ SOFTWARE.
 """
 
 import discord
-import function as func
+import unicodedata
 
-from math import ceil
 from tldextract import extract
 from discord.ext import commands
-from typing import Any, TYPE_CHECKING, reveal_type
+from typing import Any
 
-from .utils import DynamicViewManager, Pagination, BaseModal
+from .utils import DynamicViewManager, Pagination
+from .pagination import PaginationView
+from ..config import Config
+from ..utils import format_ms, truncate_string
+from ..language import LangHandler
 
-if TYPE_CHECKING:
-    from voicelink import Track
-
-
-class Select_playlist(discord.ui.Select):
+class PlaylistDropdown(discord.ui.Select):
     def __init__(self, results: list[dict[str, Any]]) -> None:
         self.view: PlaylistViewManager
 
@@ -57,63 +56,39 @@ class Select_playlist(discord.ui.Select):
         await interaction.response.edit_message(embed=await view.build_embed(), view=view)
 
 
-class PlaylistView(discord.ui.View):
+class PlaylistView(PaginationView):
     def __init__(
         self,
         primary_view: "PlaylistViewManager",
         playlist_data: dict[str, Any]
     ) -> None:
-        super().__init__(timeout=180)
-
         self.primary_view: PlaylistViewManager = primary_view
         self.author: discord.Member = primary_view.ctx.author
 
-        self.id: str = playlist_data.get("id")
+        self.playlist_id: str = playlist_data.get("id")
         self.emoji: str = playlist_data.get("emoji")
         self.name: str = playlist_data.get("name")
         self.time: str = playlist_data.get("time")
         self.type: str = playlist_data.get("type")
         self.owner_id: int = playlist_data.get("owner")
         self.perms: dict[str, list[int]] = playlist_data.get("perms")
-        self.pagination: Pagination = Pagination[dict[str, Any]](playlist_data.get("tracks"), page_size=7)
 
-        self.update_view()
-
-    def update_view(self) -> None:
-        """Update button states and page number display based on current pagination state."""
-        button_states = {
-            "fast_back": self.pagination.current_page <= 2,
-            "back": not self.pagination.has_previous_page,
-            "fast_next": self.pagination.current_page >= self.pagination.total_pages - 1,
-            "next": not self.pagination.has_next_page,
-        }
-
-        for child in self.children:
-            if child.custom_id in button_states:
-                child.disabled = button_states[child.custom_id]
-            if child.custom_id == "page_number":
-                child.label = f"{self.pagination.current_page:02}/{self.pagination.total_pages:02}"
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return interaction.user == self.author
-
-    async def on_error(self, error, item, interaction) -> None:
-        return
+        super().__init__(Pagination[dict[str, Any]](playlist_data.get("tracks"), page_size=7), primary_view.ctx.author)
     
     async def build_embed(self) -> discord.Embed:
         """Build the embed for the current page of tracks."""
         tracks = self.pagination.get_current_page_items()
-        texts = await func.get_lang(
+        texts = await LangHandler.get_lang(
             self.author.guild.id,
             "playlistView", "playlistViewDesc", "settingsPermTitle",
             "playlistViewPermsValue", "playlistViewPermsValue2",
             "playlistViewTrack", "playlistNoTrack", "playlistViewFooter"
         )
 
-        embed = discord.Embed(title=texts[0], color=func.settings.embed_color)
+        embed = discord.Embed(title=texts[0], color=Config().embed_color)
         embed.description = texts[1].format(
             self.name,
-            self.id,
+            self.playlist_id,
             self.pagination.total_items,
             self.primary_view.ctx.bot.get_user(self.owner_id),
             self.type.upper()
@@ -133,11 +108,11 @@ class PlaylistView(discord.ui.View):
         if tracks:
             for index, track in enumerate(tracks, start=self.pagination.start_index + 1):
                 if self.type == "playlist":
-                    source_emoji = func.get_source(track['sourceName'], 'emoji')
-                    track_info = f"{source_emoji} `{index:>2}.` `[{func.time(track['length'])}]` [{func.truncate_string(track['title'])}]({track['uri']})"
+                    source_emoji = Config().get_source_config(track['sourceName'], 'emoji')
+                    track_info = f"{source_emoji} `{index:>2}.` `[{format_ms(track['length'])}]` [{truncate_string(track['title'])}]({track['uri']})"
                 else:
-                    source_emoji = func.get_source(extract(track.info['uri']).domain, 'emoji')
-                    track_info = f"{source_emoji} `{index:>2}.` `[{func.time(track.length)}]` [{func.truncate_string(track.title)}]({track.uri})"
+                    source_emoji = Config().get_source_config(extract(track.info['uri']).domain, 'emoji')
+                    track_info = f"{source_emoji} `{index:>2}.` `[{format_ms(track.length)}]` [{truncate_string(track.title)}]({track.uri})"
                 embed.description += track_info + "\n"
         else:
             embed.description += texts[6].format(self.name)
@@ -146,15 +121,7 @@ class PlaylistView(discord.ui.View):
         embed.set_footer(text=texts[7].format(self.time))
         return embed
 
-    async def on_timeout(self) -> None:
-        for child in self.children:
-            child.disabled = True
-        try:
-            await self.primary_view.response.edit(view=self)
-        except:
-            pass
-
-    async def update_and_edit_message(self, interaction: discord.Interaction) -> None:
+    async def update_message(self, interaction: discord.Interaction) -> None:
         """Update the view and edit the message with the new embed."""
         self.update_view()
 
@@ -162,62 +129,7 @@ class PlaylistView(discord.ui.View):
             await interaction.followup.edit_message(self.primary_view.response.id, embed=await self.build_embed(), view=self)
         else:
             await interaction.response.edit_message(embed=await self.build_embed(), view=self)
-
-    async def on_error(self, error: Exception, item: discord.ui.Item, interaction: discord.Interaction) -> None:
-        """Handle errors that occur during interaction."""
-        func.logger.error(f"Error in PlaylistView: {error}", exc_info=error)
-
-    @discord.ui.button(label='<<', custom_id="fast_back")
-    async def fast_back_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        """Jump to the first page."""
-        self.pagination.go_page(0)
-        await self.update_and_edit_message(interaction)
-
-    @discord.ui.button(label='Back', custom_id="back", style=discord.ButtonStyle.blurple)
-    async def back_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        """Go to the previous page if it exists."""
-        self.pagination.go_back()
-        await self.update_and_edit_message(interaction)
-
-    @discord.ui.button(label="--/--", custom_id="page_number", style=discord.ButtonStyle.blurple)
-    async def page_number(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        """Display current page number."""
-        modal = BaseModal(
-            title="Page Number",
-            custom_id="page_number_modal",
-            items=[
-                discord.ui.TextInput(
-                    label="Page Number",
-                    custom_id="page_number",
-                    placeholder="Enter the page number to navigate.",
-                    default=str(self.pagination.current_page),
-                    max_length=5,
-                    required=True
-                )
-            ]
-        )
-        await interaction.response.send_modal(modal)
-        await modal.wait()
-
-        page_number = modal.values.get("page_number")
-        if not page_number or not page_number.isdigit():
-            return
-
-        self.pagination.go_page(int(page_number) - 1)
-        await self.update_and_edit_message(interaction)
-
-    @discord.ui.button(label='Next', custom_id="next", style=discord.ButtonStyle.blurple)
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        """Go to the next page if it exists."""
-        self.pagination.go_next()
-        await self.update_and_edit_message(interaction)
-
-    @discord.ui.button(label='>>', custom_id="fast_next")
-    async def fast_next_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        """Jump to the last page."""
-        self.pagination.go_page(self.pagination.total_pages - 1)
-        await self.update_and_edit_message(interaction)
-
+            
     @discord.ui.button(label="<")
     async def back_to_home(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Return to the main playlist view."""
@@ -229,7 +141,6 @@ class PlaylistView(discord.ui.View):
         await interaction.response.defer()
         cmd = interaction.client.get_command("playlist play")
         await cmd(self.primary_view.ctx, self.name)
-        # Need to handle error
     
     @discord.ui.button(label="Share", style=discord.ButtonStyle.blurple)
     async def share(self, interaction: discord.Interaction[commands.Bot], button: discord.ui.Button) -> None:
@@ -246,11 +157,18 @@ class PlaylistView(discord.ui.View):
         await interaction.response.defer()
         cmd = interaction.client.get_command("playlist delete")
         await cmd(self.primary_view.ctx, name=self.name)
-    
+        
+        if self.playlist_id != "200":
+            view: PlaylistViewManager = self.primary_view.change_view("home")
+            view.results = [item for item in view.results if item.get("id") != self.playlist_id]
+            view.clear_items()
+            view.add_item(PlaylistDropdown(view.results))
+            self.primary_view.remove_view(self.playlist_id)
+            await view.response.edit(embed=await view.build_embed(), view=view)
 
 class PlaylistViewManager(DynamicViewManager):
     def __init__(self, ctx: commands.Context, results: list[dict[str, Any]]):
-        self.ctx: commands.Context = ctx
+        self.ctx: commands.Context[commands.Bot] = ctx
         self.results: list[dict[str, Any]] = results
         
         views = {"home": self}
@@ -259,10 +177,9 @@ class PlaylistViewManager(DynamicViewManager):
         super().__init__(views=views, timeout=None)
 
         self.response: discord.Message = None
-        self.add_item(Select_playlist(results))
+        self.add_item(PlaylistDropdown(results))
 
     def get_width(self, s):
-        import unicodedata
         width = 0
         for char in str(s):
             if unicodedata.east_asian_width(char) in ('F', 'W'):
@@ -276,6 +193,18 @@ class PlaylistViewManager(DynamicViewManager):
         current_width = self.get_width(s)
         padding = width - current_width
         return s + " " * padding
+    
+    async def on_timeout(self) -> None:
+        for view in self._views.values():
+            view.stop()
+
+        for child in self.current_view.children:
+            child.disabled = True
+
+        try:
+            await self.response.edit(view=self)
+        except:
+            pass
         
     async def build_embed(self) -> discord.Embed:
         """
@@ -284,8 +213,8 @@ class PlaylistViewManager(DynamicViewManager):
         Returns:
             discord.Embed: The constructed embed with playlist details.
         """
-        _, max_p, _ = func.check_roles()
-        text = await func.get_lang(self.ctx.guild.id, "playlistViewTitle", "playlistViewHeaders", "playlistFooter")
+        max_p, _, _ = Config().get_playlist_config()
+        text = await LangHandler.get_lang(self.ctx.guild.id, "playlistViewTitle", "playlistViewHeaders", "playlistFooter")
         
         headers = text[1].split(",")
         headers.insert(0, "")
@@ -299,7 +228,7 @@ class PlaylistViewManager(DynamicViewManager):
                     info.get('emoji', '  '),
                     info.get('id', "-" * 3),
                     f"[{info.get('time', '--:--')}]",
-                    info.get('name', "-" * 6),
+                    truncate_string(info.get('name', "-" * 6), 12),
                     len(info.get('tracks', []))
                 ])
 
@@ -311,7 +240,7 @@ class PlaylistViewManager(DynamicViewManager):
             
         embed = discord.Embed(
             description=f'```{description}```',
-            color=func.settings.embed_color
+            color=Config().embed_color
         )
 
         embed.set_author(

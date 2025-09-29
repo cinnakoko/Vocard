@@ -22,18 +22,16 @@ SOFTWARE.
 """
 
 import re
-from typing import Optional
+import discord
 
-from discord import Member
+from typing import Optional
 from tldextract import extract
+from discord import Member
 
 from .enums import SearchType
-from function import (
-    get_source,
-    time as ctime
-)
-
-from .transformer import encode
+from .config import Config
+from .utils import format_ms
+from .transformer import encode, decode
 
 YOUTUBE_REGEX = re.compile(r'(https?://)?(www\.)?youtube\.(com|nl)/watch\?v=([-\w]+)')
 
@@ -83,7 +81,7 @@ class Track:
         if not self.thumbnail and YOUTUBE_REGEX.match(self.uri):
             self.thumbnail = f"https://img.youtube.com/vi/{self.identifier}/maxresdefault.jpg"
         
-        self.emoji: str = get_source(self.source, "emoji")
+        self.emoji: str = Config().get_source_config(self.source, "emoji")
         self.length: float = info.get("length")
         
         self.requester: Member = requester
@@ -114,7 +112,7 @@ class Track:
     
     @property
     def formatted_length(self) -> str:
-        return ctime(self.length)
+        return format_ms(self.length)
     
     @property
     def data(self) -> dict:
@@ -122,6 +120,14 @@ class Track:
             "track_id": self.track_id,
             "requester_id": self.requester.id
         }
+    
+    @classmethod
+    def decode(cls, track_id: str) -> dict:
+        return decode(track_id)
+        
+    @classmethod
+    def encode(cls, track_info: dict) -> 'Track':
+        return encode(track_info)
     
 class Playlist:
     """The base playlist object.

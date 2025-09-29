@@ -48,6 +48,11 @@
         "secure": false,
         "enable": false
     },
+    "playlist_settings": {
+        "max_playlist": 5,
+        "max_tracks_per_playlist": 500,
+        "default_playlist_name": "Favourite"
+    },
     "sources_settings": {
         "youtube": {
             "emoji": "<:youtube:826661982760992778>",

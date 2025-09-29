@@ -509,7 +509,7 @@ class NodePool:
             raise NodeCreationError(f"A node with identifier '{identifier}' already exists.")
         
         if not logger:
-            logger = logging.getLogger("voicelink")
+            logger = logging.getLogger("vocard")
             
         node = Node(
             pool=cls, bot=bot, host=host, port=port, password=password,

@@ -32,10 +32,6 @@ class DynamicViewManager(discord.ui.View):
         self._views: dict[str, discord.ui.View] = views
         self._current_view: discord.ui.View | None = None
 
-    def current_view(self) -> discord.ui.View | None:
-        """Get the current active view."""
-        return self._current_view
-
     def add_view(self, name: str, view: discord.ui.View) -> None:
         """
         Add a view to the manager.
@@ -87,3 +83,8 @@ class DynamicViewManager(discord.ui.View):
         
         self._current_view = view
         return view
+
+    @property
+    def current_view(self) -> discord.ui.View | None:
+        """Get the current active view."""
+        return self._current_view
