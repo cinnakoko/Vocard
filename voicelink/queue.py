@@ -21,13 +21,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import discord
+
+from itertools import cycle
+from typing import Optional, Tuple, Callable, Dict, List
+
 from .exceptions import QueueFull, OutofList
 from .objects import Track
 from .enums import LoopType
-
-from typing import Optional, Tuple, Callable, Dict, List
-from itertools import cycle
-from discord import Member
 
 class LoopTypeCycle:
     def __init__(self) -> None:
@@ -151,7 +152,7 @@ class Queue:
         except:
             raise OutofList(self.get_msg("voicelinkOutofList"))
 
-    def remove(self, index: int, index2: int = None, member: Member = None) -> Dict[int, Track]:
+    def remove(self, index: int, index2: int = None, member: discord.Member = None) -> Dict[int, Track]:
         pos = self._position - 1
 
         if index2 is None:

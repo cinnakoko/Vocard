@@ -40,6 +40,7 @@
     "bot_access_user": [],
     "embed_color":"0xb3b3b3",
     "default_max_queue": 1000,
+    "default_search_platform": "youtube",
     "lyrics_platform": "lrclib",
     "ipc_client": {
         "host": "127.0.0.1",
@@ -47,6 +48,11 @@
         "password": "YOUR_PASSWORD",
         "secure": false,
         "enable": false
+    },
+    "playlist_settings": {
+        "max_playlist": 5,
+        "max_tracks_per_playlist": 500,
+        "default_playlist_name": "Favourite"
     },
     "sources_settings": {
         "youtube": {
