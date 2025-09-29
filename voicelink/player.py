@@ -21,12 +21,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 import time, logging
 
 from math import ceil
 from asyncio import sleep
 from random import shuffle, choice
-from typing import Any, Dict, List, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Union, Tuple, TYPE_CHECKING
 
 from discord import (
     Client,
@@ -58,6 +60,9 @@ from .language import LangHandler
 from .views import InteractiveController
 from .utils import format_ms, dispatch_message
 
+if TYPE_CHECKING:
+    from .ipc import IPCClient
+
 async def connect_channel(ctx: Union[commands.Context, Interaction], channel: VoiceChannel = None):
     texts = await LangHandler.get_lang(ctx.guild.id, "noChannel", "noPermission")
     try:
@@ -79,7 +84,7 @@ async def connect_channel(ctx: Union[commands.Context, Interaction], channel: Vo
     if player.volume != 100:
         await player.set_volume(player.volume)
 
-    if ctx.bot.ipc.is_connected:
+    if player.is_ipc_connected:
         await player.send_ws({"op": "createPlayer", "memberIds": [str(member.id) for member in channel.members]})
 
     return player
@@ -107,8 +112,8 @@ class Player(VoiceProtocol):
     ):
         self.client: Client = client
         self._bot: Client = client
-        self._ipc = self._bot.ipc
-        self._ipc_connection = False
+        self._ipc_client: IPCClient = self._bot.ipc_client
+        self._ipc_connection: bool = False
         
         self.context = ctx
         self.dj: Member = ctx.user if isinstance(ctx, Interaction) else ctx.author
@@ -255,7 +260,7 @@ class Player(VoiceProtocol):
     @property
     def is_ipc_connected(self) -> bool:
         """Indicates whether the Inter-Process Communication (IPC) connection is active."""
-        return self._ipc._is_connected and self._ipc_connection
+        return self._ipc_client._is_connected and self._ipc_connection
         
     def get_msg(self, *keys) -> Union[list[str], str]:
         """Retrieves a localized message or list of messages based on the given keys
@@ -891,4 +896,4 @@ class Player(VoiceProtocol):
         payload['guildId'] = str(self.guild.id)
         if requester:
             payload['requesterId'] = str(requester.id)
-        await self.bot.ipc.send(payload)
+        await self._ipc_client.send(payload)

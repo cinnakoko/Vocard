@@ -39,3 +39,4 @@ from .placeholders import PlayerPlaceholder, BotPlaceholder
 from .mongodb import MongoDBHandler
 from .language import LangHandler
 from .lyrics import LYRICS_PLATFORMS
+from .ipc import IPCClient

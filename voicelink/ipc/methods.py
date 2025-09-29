@@ -1,12 +1,17 @@
+from __future__ import annotations
+
 import time, re
 
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, TYPE_CHECKING
 
 from discord import User, Member
 from discord.ext import commands
 from voicelink import Player, Track, Playlist, NodePool, LoopType, Filters, Config, MongoDBHandler, LangHandler, LYRICS_PLATFORMS
 from voicelink.utils import TempCtx
 
+if TYPE_CHECKING:
+    from .client import IPCClient
+    
 RATELIMIT_COUNTER: Dict[int, Dict[str, float]] = {}
 SCOPES = {
     "prefix": str,
@@ -727,7 +732,7 @@ METHODS: Dict[str, Union[SystemMethod, PlayerMethod]] = {
     "searchAndPlay": PlayerMethod(searchAndPlay, credit=5, auto_connect=True)
 }
 
-async def process_methods(ipc_client, bot: commands.Bot, data: Dict) -> None:
+async def process_methods(ipc_client: IPCClient, bot: commands.Bot, data: Dict) -> None:
     op: str = data.get("op", "")
     method = METHODS.get(op)
     if not method or not (user_id := data.get("userId")):

@@ -30,9 +30,8 @@ import logging
 import function as func
 
 from discord.ext import commands
-from ipc import IPCClient
 from logging.handlers import TimedRotatingFileHandler
-from voicelink import Config, LangHandler, MongoDBHandler, VoicelinkException
+from voicelink import Config, LangHandler, MongoDBHandler, IPCClient, VoicelinkException
 from voicelink.utils import dispatch_message
 
 class Translator(discord.app_commands.Translator):
@@ -69,7 +68,7 @@ class Vocard(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.ipc: IPCClient
+        self.ipc_client: IPCClient
 
     async def on_message(self, message: discord.Message, /) -> None:
         # Ignore messages from bots or DMs
@@ -121,10 +120,10 @@ class Vocard(commands.Bot):
                 except Exception as e:
                     func.logger.error(f"Something went wrong while loading {module[:-3]} cog.", exc_info=e)
 
-        self.ipc = IPCClient(self, **bot_config.ipc_client)
+        self.ipc_client: IPCClient = IPCClient(self, **bot_config.ipc_client)
         if bot_config.ipc_client.get("enable", False):
             try:
-                await self.ipc.connect()
+                await self.ipc_client.connect()
             except Exception as e:
                 func.logger.error(f"Cannot connected to dashboard! - Reason: {e}")
 

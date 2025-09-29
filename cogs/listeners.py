@@ -176,8 +176,8 @@ class Listeners(commands.Cog):
             if player.is_paused and len([m for m in player.channel.members if not m.bot]) == 1:
                 await player.set_pause(False, member)
                   
-        if self.bot.ipc._is_connected:
-            await self.bot.ipc.send({
+        if player.is_ipc_connected:
+            await player._ipc_client.send({
                 "op": "updateGuild",
                 "user": {
                     "userId": str(member.id),
