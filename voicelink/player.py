@@ -532,13 +532,16 @@ class Player(VoiceProtocol):
         query: str,
         *,
         requester: Member,
-        search_type: SearchType = SearchType.YOUTUBE
+        search_type: SearchType = None
     ) -> Union[List[Track], Playlist]:
         """Fetches tracks from the node's REST api to parse into Lavalink.
 
         You can also pass in a discord.py Context object to get a
         Context object on any track you search.
         """
+        if not search_type:
+            search_type = Config().search_platform
+            
         return await self._node.get_tracks(query, requester=requester, search_type=search_type)
 
     async def connect(self, *, timeout: float, reconnect: bool, self_deaf: bool = True, self_mute: bool = False):

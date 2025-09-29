@@ -214,7 +214,7 @@ class Basic(commands.Cog):
         for search_type in voicelink.SearchType
     ])
     @commands.dynamic_cooldown(cooldown_check, commands.BucketType.guild)
-    async def search(self, ctx: commands.Context, *, query: str, platform: str = voicelink.SearchType.YOUTUBE.name):
+    async def search(self, ctx: commands.Context, *, query: str, platform: str = Config().search_platform.name):
         "Searches your query and displays the results."
         player: voicelink.Player = ctx.guild.voice_client
         if not player:
@@ -226,7 +226,7 @@ class Basic(commands.Cog):
         if url(query):
             return await send_localized_message(ctx, "noLinkSupport", ephemeral=True)
         
-        search_type: voicelink.SearchType = voicelink.SearchType.match(platform) or voicelink.SearchType.YOUTUBE
+        search_type: voicelink.SearchType = voicelink.SearchType.match(platform) or Config().search_platform
         tracks = await player.get_tracks(query=query, requester=ctx.author, search_type=search_type)
         if not tracks:
             return await send_localized_message(ctx, "noTrackFound")
